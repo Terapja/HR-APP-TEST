@@ -2,5 +2,11 @@ node_modules/
 *.log
 .env
 
+# Dati HR sensibili (PII reali di dipendenti) - mai versionare
+*.csv
+*.db
+*.sqlite
+*.sqlite3
+
 # app1 e' un progetto React Native/Expo con repository git proprio
 app1/

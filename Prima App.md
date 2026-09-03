@@ -50,3 +50,42 @@ Riorganizzazione strutturale del repository `HR-APP-TEST` (cartella `APP`), comp
 - Verificato con un clone pulito da GitHub: solo `Backend/` + `.gitignore`, nessuna `node_modules`, `npm install` reinstalla correttamente le 79 dipendenze dal `package-lock.json`.
 
 Nota a parte, non ancora affrontata: `npm audit` sul `Backend` segnala 4 vulnerabilità nelle dipendenze (3 moderate, 1 alta).
+
+## 3. Nuovo progetto: interrogazione in linguaggio naturale su dati HR (avviato il 3 settembre 2026)
+
+### Obiettivo
+App che permette di interrogare in linguaggio naturale un'estrazione HR e ottenere aggregazioni grafiche (grafici) dai risultati.
+
+### Vincoli del progetto (confermati con l'utente)
+- **Budget: zero assoluto** — nessun servizio a pagamento, nemmeno costi minimi a consumo.
+- **Uso:** solo personale, occasionale (non serve gestire carichi multi-utente).
+- **Hosting:** solo locale sul PC, nessun hosting cloud necessario.
+- **Dati sensibili:** il file sorgente contiene PII reali di dipendenti (nomi, email, data di nascita, genere, nazionalità) di EssilorLuxottica. **È un progetto di lavoro autorizzato** (confermato dall'utente). Per questo motivo l'elaborazione LLM deve restare **100% locale** (es. Ollama) — nessun dato deve uscire dal PC verso API esterne (no Gemini/Claude/altri servizi cloud), nemmeno in forma aggregata, per evitare problemi di riservatezza/GDPR.
+
+### Sorgente dati
+- File: `C:\Users\riccardo.bondi\APP\Employee List.csv` (**~1,86 GB**, non versionato su Git — va tenuto escluso dal repository, vedi nota sotto).
+- **2.004.301 righe dati**, **65 colonne**, CSV UTF-8 con terminatori CRLF, ben formato (nessuna riga con numero di campi errato).
+- Copre **271.695 dipendenti unici**, uno snapshot mensile ciascuno (colonna `Year Month`, range **gennaio–settembre 2026**).
+- Gruppo EssilorLuxottica a livello worldwide: ~90 paesi, centinaia di ragioni sociali/brand (Luxottica, Essilor, Oakley, Ray-Ban, GrandVision, Sunglass Hut, Vision Express, ecc.).
+- Colonne principali: anagrafica (nome, email, data nascita, età, genere, nazionalità), posizione organizzativa (ruolo, manager, gerarchia, cost center, funzione/segmento), contratto (tipo, FTE, date di ingresso), formazione (ore/lezioni completate).
+
+### Pulizia dati necessaria prima dell'import
+1. Valori mancanti incoerenti: mix di `""` e la stringa letterale `"N/A"` — normalizzare entrambi a `NULL`.
+2. Date in formato europeo `GG/MM/AAAA` (Birth Date, Group/Current Entry Date) — convertire in formato ISO.
+3. Numeri con separatore delle migliaia (es. `"HC managed (Main pos)"` = `"200,575"`) — rimuovere la virgola prima di convertire a numero.
+4. `Gender`: ~20% dei valori vuoti (404K righe), più una categoria `OTHER` (136K righe) — da capire se è un dato genuino o un artefatto dell'estrazione prima di costruire aggregazioni su questo campo.
+5. Colonne di formazione (ore/lezioni F2F e digitali) spesso vuote per i profili executive — probabilmente dati non tracciati per certi livelli, non un errore.
+
+### Architettura decisa
+- **Database:** SQLite locale (file unico, zero costi, gestisce bene 2M+ righe con gli indici giusti).
+- **Import:** script Node.js che legge il CSV in streaming (troppo grande per stare in memoria), applica le pulizie sopra, carica in SQLite con schema tipizzato e indici (per persona, mese, country/company, manager). **Non ancora scritto — prossimo passo.**
+- **Backend:** Node.js/Express (continuità con lo stack di `Backend/`), libreria `better-sqlite3`.
+- **Linguaggio naturale → query:** domanda + schema tabella inviati a un **LLM locale** (es. Ollama) che genera una query SQL di sola lettura, eseguita in modo controllato (solo `SELECT`, validata, con limiti) sul database.
+- **Grafici:** risultato della query passato a una libreria di charting frontend (es. Chart.js) per l'aggregazione visiva.
+- **Accesso da cellulare:** possibile mantenendo l'app locale — il telefono (sulla stessa Wi-Fi) chiama l'API Express in ascolto sull'IP locale del PC (es. `http://192.168.1.x:3000`), stesso schema usato da Expo Go per `app1`. Serve far ascoltare il server su `0.0.0.0` (non solo `localhost`) e consentire la porta nel firewall di Windows per le connessioni dalla LAN.
+
+### Prossimo passo
+Scrivere lo script Node.js di import/pulizia CSV → SQLite (non ancora avviato).
+
+### Promemoria di sicurezza
+`Employee List.csv` (e il futuro file SQLite generato da esso) **non devono mai essere committati su Git/GitHub** — contengono PII reali di dipendenti. Aggiunte a `.gitignore` di `APP`: `*.csv`, `*.db`, `*.sqlite`.
