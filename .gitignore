@@ -1,0 +1,6 @@
+node_modules/
+*.log
+.env
+
+# app1 e' un progetto React Native/Expo con repository git proprio
+app1/
